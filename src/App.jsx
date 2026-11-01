@@ -11,6 +11,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [identity, setIdentity] = useState(null);
   const [bootError, setBootError] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   const { t, translated } = useMemo(() => makeT(lang), [lang]);
 
@@ -45,7 +46,25 @@ export default function App() {
     boot();
   }, [boot]);
 
+  // A 401 on any authenticated call means the stored session is dead (server
+  // restarted, store wiped, token expired). Drop it and explain, rather than
+  // leaving a bare "unauthorized" on the screen.
+  useEffect(() => {
+    const onUnauthorized = (event) => {
+      const path = event.detail?.path || 'a request';
+      setToken(null);
+      setUser(null);
+      setIdentity(null);
+      setPhase('onboarding');
+      setBootError(null);
+      setNotice(`Your session expired while calling ${path}. Please sign in again — your account still exists.`);
+    };
+    window.addEventListener('bharatchat:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('bharatchat:unauthorized', onUnauthorized);
+  }, []);
+
   const handleOnboarded = useCallback(async (authedUser) => {
+    setNotice(null);
     const id = await ensureIdentity(authedUser.id);
     setUser(authedUser);
     setIdentity(id);
@@ -90,6 +109,7 @@ export default function App() {
       onLangChange={setLang}
       initialUser={user}
       bootError={bootError}
+      notice={notice}
       onDone={handleOnboarded}
     />
   );

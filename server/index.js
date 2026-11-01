@@ -25,6 +25,27 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, devSms: DEV_SMS, prod: IS_PROD, users: db.users.length });
 });
 
+// Request log (development only). Without this, a 401 in the browser is a dead
+// end: the client only surfaces an error string with no endpoint attached.
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    if (!IS_PROD && req.originalUrl.startsWith('/api/') && res.statusCode < 400) {
+      console.log(`[${res.statusCode}] ${req.method} ${req.originalUrl.split('?')[0]}`);
+    }
+    if (res.statusCode >= 400) {
+      const auth = req.get('authorization');
+      const tokenState = auth
+        ? `token=${auth.slice(7, 19)}…(${verifySession(auth.slice(7)) ? 'valid' : 'INVALID'})`
+        : req.query.t
+          ? `queryToken=${String(req.query.t).slice(0, 12)}…(${verifySession(req.query.t) ? 'valid' : 'INVALID'})`
+          : 'no-token';
+      console.warn(`[${res.statusCode}] ${req.method} ${req.originalUrl.split('?')[0]} ${tokenState}`);
+    }
+  });
+  next();
+});
+
+
 app.use(authRouter);
 app.use(mediaRouter);
 app.use(chatRouter);

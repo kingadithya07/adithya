@@ -1,17 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { api, setToken } from '../api.js';
+import { api, setToken, humanError } from '../api.js';
 import { LANGUAGES, TRANSLATED, languageByCode } from '../i18n.js';
 
 const STEPS = ['language', 'phone', 'otp', 'profile'];
 
-export default function Onboarding({ t, lang, translated, onLangChange, onDone, bootError }) {
-  const [step, setStep] = useState('language');
+export default function Onboarding({ t, lang, translated, onLangChange, onDone, initialUser, bootError, notice }) {
+  // If the tab already holds a valid session for an account that never finished
+  // its profile, resume at the profile step instead of restarting at language
+  // selection — otherwise an interrupted sign-up can never be completed.
+  const [step, setStep] = useState(() => (initialUser && !initialUser.name ? 'profile' : 'language'));
   const [phone, setPhone] = useState('');
   const [otpInfo, setOtpInfo] = useState(null);
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState(bootError);
   const [busy, setBusy] = useState(false);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => initialUser?.name || '');
   const [about, setAbout] = useState('');
   const [avatar, setAvatar] = useState(null);
   const [compression, setCompression] = useState(null);
@@ -32,7 +35,7 @@ export default function Onboarding({ t, lang, translated, onLangChange, onDone, 
       setStep('otp');
       if (info.devCode) setCode(info.devCode.split(''));
     } catch (err) {
-      setError(err.data?.error || err.message);
+      setError(humanError(err));
     } finally {
       setBusy(false);
     }
@@ -52,7 +55,13 @@ export default function Onboarding({ t, lang, translated, onLangChange, onDone, 
         onDone(user);
       }
     } catch (err) {
-      setError(err.data?.error || err.message);
+      setError(humanError(err));
+      // A rejected code leaves the boxes full, which blocks retyping (and would
+      // re-trigger auto-submit). Clear them and focus the first box.
+      if (['wrong_code', 'otp_expired', 'no_otp_requested'].includes(err.data?.error)) {
+        setCode(['', '', '', '', '', '']);
+        setTimeout(() => otpRefs.current[0]?.focus(), 30);
+      }
     } finally {
       setBusy(false);
     }
@@ -101,7 +110,7 @@ export default function Onboarding({ t, lang, translated, onLangChange, onDone, 
       setAvatar(`/api/media/${res.avatar.id}?v=${res.avatar.updatedAt}`);
       setCompression(res.compression);
     } catch (err) {
-      setError(err.data?.error || err.message);
+      setError(humanError(err));
     } finally {
       setBusy(false);
     }
@@ -114,7 +123,7 @@ export default function Onboarding({ t, lang, translated, onLangChange, onDone, 
       const { user } = await api.saveProfile(name.trim(), about.trim());
       onDone(user);
     } catch (err) {
-      setError(err.data?.error || err.message);
+      setError(humanError(err));
     } finally {
       setBusy(false);
     }
@@ -136,6 +145,12 @@ export default function Onboarding({ t, lang, translated, onLangChange, onDone, 
             <span key={s} className={i <= stepIndex ? 'dot on' : 'dot'} />
           ))}
         </div>
+
+        {notice && (
+          <div className="dev-note notice">
+            <strong>Signed out.</strong> {notice}
+          </div>
+        )}
 
         {step === 'language' && (
           <section className="pane">

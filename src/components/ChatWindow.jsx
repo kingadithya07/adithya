@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
+import { api, humanError } from '../api.js';
 import {
   compressImage,
   encryptMediaBytes,
@@ -66,7 +66,7 @@ export default function ChatWindow({
       setDraft('');
       await onIngest(message);
     } catch (err) {
-      setError(err.data?.error || err.message);
+      setError(humanError(err));
     } finally {
       setSending(false);
     }
@@ -113,7 +113,7 @@ export default function ChatWindow({
       await onIngest(message);
       setUpload(null);
     } catch (err) {
-      setError(err.data?.error || err.message);
+      setError(humanError(err));
       setUpload(null);
     } finally {
       setSending(false);
